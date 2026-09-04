@@ -84,17 +84,19 @@ ui <- fluidPage(
                                      "Min-Max-Bereich (Vorjahre) + Aktuelles Jahr" = "minmax",
                                      "Alle Jahre (Vorjahre grau, Aktuelles Jahr farbig)" = "all_years"
                                    ),
-                                   selected = "minmax"),
-                      checkboxInput("checkboxInput_season_show_lastpoint", "Letzten Wert hervorheben", value = TRUE)
+                                   selected = "minmax")
                     ),
                     conditionalPanel(
                       condition = "input.radioInput_chart_category == 'Zeitreihendiagramm'",
                       checkboxGroupButtons("checkboxGroupButtons_series_geom_type", "Auswahl der Zeitreihen-Typen",
                                            choices = c("Linie", "Stufen", "Balken", "Punkt", "Fläche"),
                                            selected = "Linie"),
-                      checkboxInput("checkboxInput_show_lastpoint", "Letzten Wert hervorheben", value = TRUE),
                       checkboxInput("checkboxInput_position_stack", "Zeitreihen stapeln", value = FALSE),
                       checkboxInput("checkboxInput_index_100", "Auf Startwert 100 indexieren", value = FALSE)
+                    ),
+                    conditionalPanel(
+                      condition = "input.radioInput_chart_category == 'Zeitreihendiagramm' || input.radioInput_chart_category == 'Saisonalität'",
+                      checkboxInput("checkboxInput_show_lastpoint", "Letzten Wert hervorheben", value = TRUE)
                     ),
                     conditionalPanel(
                       condition = "input.radioInput_chart_category == 'Kategoriendiagramm'",

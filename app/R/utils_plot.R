@@ -204,13 +204,12 @@ render_season_chart <- function(df, input, fill_colors = lukb_colors) {
   }
   
   # Letzten Punkt hervorheben
-  show_last <- isTRUE(input$checkboxInput_season_show_lastpoint) || isTRUE(input$checkboxInput_show_lastpoint)
-  if (show_last && nrow(df_latest) > 0) {
+  if (isTRUE(input$checkboxInput_show_lastpoint) && nrow(df_latest) > 0) {
     df_last <- df_latest %>% filter(dummy_date == max(dummy_date, na.rm = TRUE))
     p <- p + geom_point(
       data = df_last,
       aes(x = dummy_date, y = value),
-      fill = "red", color = "black", shape = 21, size = 2.5, inherit.aes = FALSE
+      fill = "red", color = "black", shape = 21, size = 2, inherit.aes = FALSE
     )
   }
   
