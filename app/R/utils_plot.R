@@ -16,6 +16,50 @@ create_pie_polygons <- function(df_pie, radius = 1) {
   polygons
 }
 
+# Hilfsfunktion: Interpoliert fehlende Tage (z.B. Wochenenden, Feiertage) innerhalb eines Jahres
+interpolate_season_year <- function(df_yr, is_latest_year = FALSE) {
+  if (is.null(df_yr) || nrow(df_yr) == 0) return(df_yr)
+  
+  # Duplikate auf Tagesebene mitteln
+  df_agg <- df_yr %>%
+    group_by(dummy_date) %>%
+    summarise(
+      value = mean(value, na.rm = TRUE),
+      .groups = "drop"
+    ) %>%
+    arrange(dummy_date)
+  
+  if (nrow(df_agg) < 2) {
+    return(tibble(
+      dummy_date = df_agg$dummy_date,
+      value = df_agg$value
+    ))
+  }
+  
+  min_d <- min(df_agg$dummy_date)
+  max_d <- max(df_agg$dummy_date)
+  
+  # Für Vorjahre, die nahe an Jahresanfang/-ende reichen, volles Jahr interpolieren
+  if (!is_latest_year) {
+    if (min_d <= as.Date("2024-01-10")) min_d <- as.Date("2024-01-01")
+    if (max_d >= as.Date("2024-12-20")) max_d <- as.Date("2024-12-31")
+  }
+  
+  grid_dates <- seq.Date(min_d, max_d, by = "1 day")
+  
+  interp_res <- stats::approx(
+    x = as.numeric(df_agg$dummy_date),
+    y = as.numeric(df_agg$value),
+    xout = as.numeric(grid_dates),
+    rule = 2
+  )
+  
+  tibble(
+    dummy_date = grid_dates,
+    value = interp_res$y
+  )
+}
+
 # Saisonalitäts-Diagramm (Saison-Chart über gemapptes Kalenderjahr)
 render_season_chart <- function(df, input, fill_colors = lukb_colors) {
   main_color <- fill_colors[1]
@@ -49,8 +93,14 @@ render_season_chart <- function(df, input, fill_colors = lukb_colors) {
   latest_year_num <- max(years_available)
   latest_year_str <- as.character(latest_year_num)
   
-  df_prior <- df_season %>% filter(year_num < latest_year_num)
-  df_latest <- df_season %>% filter(year_num == latest_year_num)
+  # Fehlende Tage (Wochenenden, Feiertage) pro Jahr und Serie interpolieren
+  df_season_interp <- df_season %>%
+    group_by(label, year_num, year) %>%
+    group_modify(~ interpolate_season_year(.x, is_latest_year = (.y$year_num == latest_year_num))) %>%
+    ungroup()
+  
+  df_prior <- df_season_interp %>% filter(year_num < latest_year_num)
+  df_latest <- df_season_interp %>% filter(year_num == latest_year_num)
   
   # Achsenparameter
   date_breaks <- if (!is.null(input$textInput_date_breaks) && input$textInput_date_breaks != "") {

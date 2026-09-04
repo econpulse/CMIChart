@@ -15,3 +15,7 @@
 # Debug and temporary plot files
 app/Rplots.pdf
 app/scratch_input_debug.txt
+
+Mappe1.xlsx
+Shinyplot.png
+charts.db
