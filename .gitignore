@@ -1,0 +1,17 @@
+# History files
+.Rhistory
+.Rapp.history
+
+# Session Data files
+.RData
+.RDataTmp
+
+# User-specific files
+.Ruserdata
+
+# Example RStudio Project files
+.Rproj.user/
+
+# Debug and temporary plot files
+app/Rplots.pdf
+app/scratch_input_debug.txt
