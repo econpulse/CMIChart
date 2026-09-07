@@ -142,18 +142,49 @@ server <- function(input, output, session) {
     df[["label"]]
   }
   
-  # Benutzerdefinierte Zeitreihen
-  custom_series <- reactiveVal(list())
+  # Keep track of transformations
+  series_transformations <- reactiveValues()
+  
+  observe({
+    labels <- unique(c(safe_labels(source_data$db), safe_labels(source_data$excel)))
+    labels <- na.omit(labels)
+    for (lbl in labels) {
+      if (is.null(series_transformations[[lbl]])) {
+        series_transformations[[lbl]] <- list(type = "Rohwert", lag = 12)
+      }
+    }
+  })
+  
+  observe({
+    labels <- unique(c(safe_labels(source_data$db), safe_labels(source_data$excel)))
+    labels <- na.omit(labels)
+    for (lbl in labels) {
+      sanitized <- sanitize_id(lbl)
+      type_id <- paste0("trans_type_", sanitized)
+      lag_id <- paste0("trans_lag_", sanitized)
+      
+      if (!is.null(input[[type_id]])) {
+        current <- isolate(series_transformations[[lbl]])
+        new_type <- input[[type_id]]
+        new_lag <- input[[lag_id]]
+        if (is.null(new_lag) || is.na(new_lag)) {
+          new_lag <- 12
+        }
+        
+        if (is.null(current) || current$type != new_type || current$lag != new_lag) {
+          series_transformations[[lbl]] <- list(type = new_type, lag = as.numeric(new_lag))
+        }
+      }
+    }
+  })
   
   # Temporärer Speicher für geladene Inputs zur Erhaltung bei Re-Renderings
   loaded_inputs <- reactiveVal(NULL)
   
-  # Verfügbare Serien-Labels (inkl. berechneter Custom-Serien)
+  # Verfügbare Serien-Labels
   available_labels <- reactive({
     raw_lbls <- unique(c(safe_labels(source_data$db), safe_labels(source_data$excel)))
-    raw_lbls <- na.omit(raw_lbls)
-    cust_lbls <- names(custom_series())
-    c(raw_lbls, cust_lbls)
+    na.omit(raw_lbls)
   })
   
   # Aktualisierung des Serien-Auswahl-Dropdowns
@@ -172,137 +203,57 @@ server <- function(input, output, session) {
     )
   })
   
-  # Custom-Zeitreihe hinzufügen
-  observeEvent(input$btn_add_custom, {
-    name <- str_squish(input$textInput_custom_name)
-    formula_str <- str_squish(input$textInput_custom_formula)
-    
-    if (name == "") {
-      showNotification("Bitte geben Sie einen Namen für die neue Zeitreihe ein.", type = "error")
-      return()
-    }
-    if (formula_str == "") {
-      showNotification("Bitte geben Sie eine Formel ein.", type = "error")
-      return()
-    }
-    
-    existing <- available_labels()
-    if (name %in% existing) {
-      showNotification("Dieser Name existiert bereits.", type = "error")
-      return()
-    }
-    
-    labels_raw <- unique(c(safe_labels(source_data$db), safe_labels(source_data$excel)))
-    labels_raw <- na.omit(labels_raw)
-    label_map <- setNames(LETTERS[1:length(labels_raw)], labels_raw)
-    
-    formula_upper <- toupper(formula_str)
-    if (!is_safe_formula(formula_upper, allowed_vars = as.character(label_map))) {
-      showNotification("Ungültige oder unsichere Formel. Erlaubt sind A, B, C... sowie ACH, PCH, ABS, MAV, LAG, LOG.", type = "error")
-      return()
-    }
-    
-    current <- custom_series()
-    current[[name]] <- list(name = name, formula = formula_str)
-    custom_series(current)
-    
-    updateTextInput(session, "textInput_custom_name", value = "")
-    updateTextInput(session, "textInput_custom_formula", value = "")
-    showNotification(paste0("Zeitreihe '", name, "' hinzugefügt."), type = "message")
-  })
-  
-  # Dropdown für Custom-Serien-Löschung aktualisieren
-  observe({
-    cust_names <- names(custom_series())
-    updateSelectInput(session, "selectInput_delete_custom", choices = cust_names)
-  })
-  
-  # Custom-Zeitreihe löschen
-  observeEvent(input$btn_delete_custom, {
-    selected <- input$selectInput_delete_custom
-    req(selected)
-    current <- custom_series()
-    current[[selected]] <- NULL
-    custom_series(current)
-    showNotification(paste0("Zeitreihe '", selected, "' entfernt."), type = "message")
-  })
-  
-  output$has_custom_series <- reactive({
-    length(custom_series()) > 0
-  })
-  outputOptions(output, "has_custom_series", suspendWhenHidden = FALSE)
-  
   # Dynamische UI für Zeitreihentransformationen rendern
   output$transformation_controls <- renderUI({
-    raw_labels <- unique(c(safe_labels(source_data$db), safe_labels(source_data$excel)))
-    raw_labels <- na.omit(raw_labels)
+    labels <- unique(c(safe_labels(source_data$db), safe_labels(source_data$excel)))
+    labels <- na.omit(labels)
     
-    if (length(raw_labels) == 0) {
+    if (length(labels) == 0) {
       return(p("Keine Zeitreihen geladen. Bitte laden Sie eine Excel-Datei hoch oder rufen Sie DB-Daten ab.", style = "color: #777; font-style: italic;"))
     }
     
-    label_map <- setNames(LETTERS[1:length(raw_labels)], raw_labels)
-    
-    # Legende (A = Name, B = Name, ...)
-    legend_items <- lapply(names(label_map), function(lbl) {
-      letter <- label_map[[lbl]]
-      tags$li(
-        tags$b(letter, style = "color: #005A36;"), " = ", lbl,
-        style = "margin-bottom: 5px; list-style-type: none;"
-      )
-    })
-    
-    # Eingabefelder für Original-Serien
-    formula_inputs <- lapply(names(label_map), function(lbl) {
-      letter <- label_map[[lbl]]
-      input_id <- paste0("textInput_formula_", letter)
+    ui_elements <- lapply(labels, function(lbl) {
+      sanitized <- sanitize_id(lbl)
       
-      current_val <- NULL
-      if (!is.null(loaded_inputs()) && !is.null(loaded_inputs()[[input_id]])) {
-        current_val <- loaded_inputs()[[input_id]]
-      } else if (!is.null(input[[input_id]])) {
-        current_val <- input[[input_id]]
-      } else {
-        current_val <- letter
-      }
+      current_val <- series_transformations[[lbl]]
+      selected_type <- if (!is.null(current_val)) current_val$type else "Rohwert"
+      selected_lag <- if (!is.null(current_val)) current_val$lag else 12
       
       div(
-        style = "margin-bottom: 10px;",
-        tags$label(paste0(letter, " (", lbl, ")"), `for` = input_id, style = "font-weight: bold; font-size: 0.9rem; margin-bottom: 3px;"),
-        textInput(input_id, label = NULL, value = current_val, placeholder = paste0("z.B. PCH(", letter, ", 12)"))
+        style = "border-bottom: 1px solid #eee; padding-bottom: 15px; margin-bottom: 15px;",
+        tags$h5(lbl, style = "color: #005A36; font-weight: bold; margin-bottom: 10px;"),
+        fluidRow(
+          column(
+            width = 6,
+            selectInput(
+              inputId = paste0("trans_type_", sanitized),
+              label = "Transformation",
+              choices = c(
+                "Rohwert" = "Rohwert",
+                "Relative Veränderung (%)" = "pct_change",
+                "Absolute Veränderung" = "abs_change"
+              ),
+              selected = selected_type
+            )
+          ),
+          column(
+            width = 6,
+            conditionalPanel(
+              condition = sprintf("input['trans_type_%s'] != 'Rohwert'", sanitized),
+              numericInput(
+                inputId = paste0("trans_lag_", sanitized),
+                label = "Perioden / Lag",
+                value = selected_lag,
+                min = 1,
+                step = 1
+              )
+            )
+          )
+        )
       )
     })
     
-    custom_ui <- div(
-      tags$h6("Neue Zeitreihe erstellen", style = "color: #005A36; font-weight: bold; margin-top: 0px;"),
-      fluidRow(
-        column(width = 6, textInput("textInput_custom_name", "Name (z.B. Spread)", value = "")),
-        column(width = 6, textInput("textInput_custom_formula", "Formel (z.B. A - B)", value = ""))
-      ),
-      actionButton("btn_add_custom", "Hinzufügen", class = "btn-primary btn-sm", style = "margin-bottom: 15px;"),
-      
-      conditionalPanel(
-        condition = "output.has_custom_series",
-        tags$h6("Custom-Zeitreihe löschen", style = "color: #d9534f; font-weight: bold; margin-top: 10px; border-top: 1px solid #eee; padding-top: 10px;"),
-        fluidRow(
-          column(width = 8, selectInput("selectInput_delete_custom", label = NULL, choices = NULL)),
-          column(width = 4, actionButton("btn_delete_custom", "Löschen", class = "btn-danger btn-sm", style = "margin-top: 0px;"))
-        )
-      )
-    )
-    
-    fluidRow(
-      column(
-        width = 6,
-        tags$h6("Original-Zeitreihen anpassen", style = "color: #005A36; font-weight: bold; margin-bottom: 10px;"),
-        tags$ul(legend_items, style = "padding-left: 0; margin-bottom: 15px;"),
-        formula_inputs
-      ),
-      column(
-        width = 6,
-        custom_ui
-      )
-    )
+    do.call(tagList, ui_elements)
   })
   
   # Trigger für Vorlagentabellen-Updates
@@ -362,8 +313,7 @@ server <- function(input, output, session) {
     list_of_inputs <- reactiveValuesToList(input, all.names = TRUE)
     data_list <- list(
       db = source_data$db, 
-      excel = source_data$excel,
-      custom_series = custom_series()
+      excel = source_data$excel
     )
     
     save_chart_db(chart_name, list_of_inputs, data_list)
@@ -388,12 +338,6 @@ server <- function(input, output, session) {
     session$onFlushed(function() {
       loaded_inputs(NULL)
     }, once = TRUE)
-    
-    if (!is.null(restored_data$custom_series)) {
-      custom_series(restored_data$custom_series)
-    } else {
-      custom_series(list())
-    }
     
     db_ticker_val <- saved_inputs[["textInput_dbticker"]]
     db_label_val <- saved_inputs[["textInput_dblabel"]]
@@ -441,13 +385,24 @@ server <- function(input, output, session) {
     
     raw_lbls <- unique(c(safe_labels(source_data$db), safe_labels(source_data$excel)))
     raw_lbls <- na.omit(raw_lbls)
-    cust_lbls <- names(custom_series())
-    all_labels <- c(raw_lbls, cust_lbls)
+    
+    # Transformations-Einstellungen aus Vorlage wiederherstellen
+    for (lbl in raw_lbls) {
+      sanitized <- sanitize_id(lbl)
+      saved_type <- saved_inputs[[paste0("trans_type_", sanitized)]]
+      saved_lag <- saved_inputs[[paste0("trans_lag_", sanitized)]]
+      if (!is.null(saved_type)) {
+        series_transformations[[lbl]] <- list(
+          type = saved_type,
+          lag = if (is.null(saved_lag)) 12 else as.numeric(saved_lag)
+        )
+      }
+    }
     
     freezeReactiveValue(input, "selectizeInput_series_selection")
     updateSelectizeInput(
       session, "selectizeInput_series_selection",
-      choices = all_labels,
+      choices = raw_lbls,
       selected = saved_chart$inputs$selectizeInput_series_selection
     )
     
@@ -463,8 +418,10 @@ server <- function(input, output, session) {
         } else {
           updateCheckboxInput(session, name, value = as.logical(val))
         }
-      } else if (grepl("selectizeInput|selectInput", name)) {
+      } else if (grepl("selectizeInput|selectInput|trans_type_", name)) {
         updateSelectInput(session, name, selected = val)
+      } else if (grepl("numericInput|trans_lag_", name)) {
+        updateNumericInput(session, name, value = as.numeric(val))
       } else if (grepl("textInput", name)) {
         updateTextInput(session, name, value = as.character(val))
       } else if (grepl("sliderInput", name)) {
@@ -570,18 +527,9 @@ server <- function(input, output, session) {
     raw_labels <- unique(na.omit(c(safe_labels(source_data$db), safe_labels(source_data$excel))))
     req(length(raw_labels) > 0)
     
-    label_map <- setNames(LETTERS[1:length(raw_labels)], raw_labels)
-    original_formula_map <- list()
-    for (lbl in names(label_map)) {
-      letter <- label_map[[lbl]]
-      input_id <- paste0("textInput_formula_", letter)
-      original_formula_map[[letter]] <- input[[input_id]]
-    }
-    
     df <- transform_chart_data(
       df_raw = df_raw,
-      original_formula_map = original_formula_map,
-      custom_series_list = custom_series(),
+      series_transformations = reactiveValuesToList(series_transformations),
       selected_series = input$selectizeInput_series_selection
     )
     
