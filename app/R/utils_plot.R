@@ -39,9 +39,10 @@ interpolate_season_year <- function(df_yr, is_latest_year = FALSE) {
   min_d <- min(df_agg$dummy_date)
   max_d <- max(df_agg$dummy_date)
   
-  # Für Vorjahre, die nahe an Jahresanfang/-ende reichen, volles Jahr interpolieren
+  # Für Jahre, die nahe an Jahresanfang reichen, ab 1. Januar interpolieren
+  if (min_d <= as.Date("2024-01-10")) min_d <- as.Date("2024-01-01")
+  # Für Vorjahre, die nahe an Jahresende reichen, bis 31. Dezember interpolieren
   if (!is_latest_year) {
-    if (min_d <= as.Date("2024-01-10")) min_d <- as.Date("2024-01-01")
     if (max_d >= as.Date("2024-12-20")) max_d <- as.Date("2024-12-31")
   }
   
@@ -88,6 +89,18 @@ render_season_chart <- function(df, input, fill_colors = lukb_colors) {
     ) %>%
     filter(!is.na(dummy_date)) %>%
     arrange(year_num, dummy_date)
+  
+  # Optional: Jedes Jahr auf Startwert 100 indexieren (1. Jan / erster verfügbarer Wert = 100)
+  if (!is.null(input$checkboxInput_season_index_100) && isTRUE(input$checkboxInput_season_index_100)) {
+    df_season <- df_season %>%
+      group_by(label, year_num) %>%
+      arrange(date) %>%
+      mutate(
+        first_val = first(value[!is.na(value)]),
+        value = if_else(!is.na(first_val) & first_val != 0, (value / first_val) * 100, value)
+      ) %>%
+      ungroup()
+  }
   
   years_available <- sort(unique(df_season$year_num))
   latest_year_num <- max(years_available)

@@ -84,7 +84,8 @@ ui <- fluidPage(
                                      "Min-Max-Bereich (Vorjahre) + Aktuelles Jahr" = "minmax",
                                      "Alle Jahre (Vorjahre grau, Aktuelles Jahr farbig)" = "all_years"
                                    ),
-                                   selected = "minmax")
+                                   selected = "minmax"),
+                      checkboxInput("checkboxInput_season_index_100", "Auf Startwert 100 indexieren (1. Jan = 100)", value = FALSE)
                     ),
                     conditionalPanel(
                       condition = "input.radioInput_chart_category == 'Zeitreihendiagramm'",
