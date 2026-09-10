@@ -27,15 +27,21 @@ transform_chart_data <- function(df_raw, series_transformations, selected_series
     trans <- series_transformations[[lbl]]
     
     if (!is.null(trans) && !is.null(trans$type) && trans$type != "Rohwert") {
-      lag_val <- trans$lag
-      if (is.null(lag_val) || is.na(lag_val) || lag_val < 1) lag_val <- 1
-      lag_val <- as.numeric(lag_val)
-      
       if (trans$type == "pct_change") {
+        lag_val <- trans$lag
+        if (is.null(lag_val) || is.na(lag_val) || lag_val < 1) lag_val <- 1
+        lag_val <- as.numeric(lag_val)
         l <- dplyr::lag(sub_df$value, lag_val)
         sub_df$value <- (sub_df$value - l) / l * 100
       } else if (trans$type == "abs_change") {
+        lag_val <- trans$lag
+        if (is.null(lag_val) || is.na(lag_val) || lag_val < 1) lag_val <- 1
+        lag_val <- as.numeric(lag_val)
         sub_df$value <- sub_df$value - dplyr::lag(sub_df$value, lag_val)
+      } else if (trans$type == "add_constant") {
+        offset <- trans$offset
+        if (is.null(offset) || is.na(offset)) offset <- 0
+        sub_df$value <- sub_df$value + as.numeric(offset)
       }
     }
     

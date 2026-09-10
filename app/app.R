@@ -150,7 +150,7 @@ server <- function(input, output, session) {
     labels <- na.omit(labels)
     for (lbl in labels) {
       if (is.null(series_transformations[[lbl]])) {
-        series_transformations[[lbl]] <- list(type = "Rohwert", lag = 12)
+        series_transformations[[lbl]] <- list(type = "Rohwert", lag = 12, offset = 0)
       }
     }
   })
@@ -162,6 +162,7 @@ server <- function(input, output, session) {
       sanitized <- sanitize_id(lbl)
       type_id <- paste0("trans_type_", sanitized)
       lag_id <- paste0("trans_lag_", sanitized)
+      offset_id <- paste0("trans_offset_", sanitized)
       
       if (!is.null(input[[type_id]])) {
         current <- isolate(series_transformations[[lbl]])
@@ -170,9 +171,17 @@ server <- function(input, output, session) {
         if (is.null(new_lag) || is.na(new_lag)) {
           new_lag <- 12
         }
+        new_offset <- input[[offset_id]]
+        if (is.null(new_offset) || is.na(new_offset)) {
+          new_offset <- 0
+        }
         
-        if (is.null(current) || current$type != new_type || current$lag != new_lag) {
-          series_transformations[[lbl]] <- list(type = new_type, lag = as.numeric(new_lag))
+        if (is.null(current) || current$type != new_type || current$lag != new_lag || is.null(current$offset) || current$offset != new_offset) {
+          series_transformations[[lbl]] <- list(
+            type = new_type,
+            lag = as.numeric(new_lag),
+            offset = as.numeric(new_offset)
+          )
         }
       }
     }
@@ -218,6 +227,7 @@ server <- function(input, output, session) {
       current_val <- series_transformations[[lbl]]
       selected_type <- if (!is.null(current_val)) current_val$type else "Rohwert"
       selected_lag <- if (!is.null(current_val)) current_val$lag else 12
+      selected_offset <- if (!is.null(current_val) && !is.null(current_val$offset)) current_val$offset else 0
       
       div(
         style = "border-bottom: 1px solid #eee; padding-bottom: 15px; margin-bottom: 15px;",
@@ -231,7 +241,8 @@ server <- function(input, output, session) {
               choices = c(
                 "Rohwert" = "Rohwert",
                 "Relative Veränderung (%)" = "pct_change",
-                "Absolute Veränderung" = "abs_change"
+                "Absolute Veränderung" = "abs_change",
+                "Konstante addieren" = "add_constant"
               ),
               selected = selected_type
             )
@@ -239,13 +250,22 @@ server <- function(input, output, session) {
           column(
             width = 6,
             conditionalPanel(
-              condition = sprintf("input['trans_type_%s'] != 'Rohwert'", sanitized),
+              condition = sprintf("input['trans_type_%s'] == 'pct_change' || input['trans_type_%s'] == 'abs_change'", sanitized, sanitized),
               numericInput(
                 inputId = paste0("trans_lag_", sanitized),
                 label = "Perioden / Lag",
                 value = selected_lag,
                 min = 1,
                 step = 1
+              )
+            ),
+            conditionalPanel(
+              condition = sprintf("input['trans_type_%s'] == 'add_constant'", sanitized),
+              numericInput(
+                inputId = paste0("trans_offset_", sanitized),
+                label = "Konstanter Wert",
+                value = selected_offset,
+                step = 0.1
               )
             )
           )
@@ -391,10 +411,12 @@ server <- function(input, output, session) {
       sanitized <- sanitize_id(lbl)
       saved_type <- saved_inputs[[paste0("trans_type_", sanitized)]]
       saved_lag <- saved_inputs[[paste0("trans_lag_", sanitized)]]
+      saved_offset <- saved_inputs[[paste0("trans_offset_", sanitized)]]
       if (!is.null(saved_type)) {
         series_transformations[[lbl]] <- list(
           type = saved_type,
-          lag = if (is.null(saved_lag)) 12 else as.numeric(saved_lag)
+          lag = if (is.null(saved_lag)) 12 else as.numeric(saved_lag),
+          offset = if (is.null(saved_offset)) 0 else as.numeric(saved_offset)
         )
       }
     }
@@ -420,7 +442,7 @@ server <- function(input, output, session) {
         }
       } else if (grepl("selectizeInput|selectInput|trans_type_", name)) {
         updateSelectInput(session, name, selected = val)
-      } else if (grepl("numericInput|trans_lag_", name)) {
+      } else if (grepl("numericInput|trans_lag_|trans_offset_", name)) {
         updateNumericInput(session, name, value = as.numeric(val))
       } else if (grepl("textInput", name)) {
         updateTextInput(session, name, value = as.character(val))
