@@ -66,7 +66,9 @@ init_db <- function() {
 save_chart_db <- function(name, inputs_list, data_list) {
   exclude_keys <- c(
     "btn_save_chart", "btn_delete_chart", "btn_file1", "btn_inputs", 
-    "btn_getinputs", "btn_pulldb", "select_saved_chart", "btn_downloadPlot"
+    "btn_getinputs", "btn_pulldb", "select_saved_chart", "btn_downloadPlot",
+    "btn_edit_data", "hot_edit_table", "btn_apply_edit_data", "btn_add_row_hot",
+    "btn_reset_edited_data"
   )
   clean_list <- inputs_list[!names(inputs_list) %in% exclude_keys]
   inputs_json <- toJSON(clean_list, auto_unbox = TRUE)
@@ -163,9 +165,18 @@ delete_chart_db <- function(name) {
 }
 
 get_db_data <- function(ticker_in) {
+  ticker_in <- toupper(stringr::str_squish(ticker_in))
+  ticker_in <- ticker_in[ticker_in != ""]
+  if (length(ticker_in) == 0) {
+    return(tibble(ticker = character(0), date = as.Date(character(0)), value = numeric(0)))
+  }
+  
   dplyr::tbl(lukb_con(), "temp_db")  %>%
     dplyr::filter(ticker %in% ticker_in) %>%
     dplyr::arrange(ticker, date) %>%
     dplyr::collect()  %>%
-    dplyr::mutate(date = as.Date(date, origin = "1970-01-01"))
+    dplyr::mutate(
+      ticker = toupper(stringr::str_squish(ticker)),
+      date = as.Date(date, origin = "1970-01-01")
+    )
 }

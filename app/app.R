@@ -12,6 +12,7 @@ init_db()
 
 # UI-Definition
 ui <- fluidPage(
+  useShinyjs(),
   theme = bs_theme(bootswatch = "flatly"),
   
   fluidRow(
@@ -24,6 +25,7 @@ ui <- fluidPage(
         textInput("textInput_dbticker", "DB ticker"),
         textInput("textInput_dblabel", "Label ticker(;)"),
         actionButton("btn_pulldb", "Get DB data"),
+        actionButton("btn_edit_data", "Edit Data", class = "btn-outline-primary", icon = icon("table"), style = "margin-top: 8px; margin-bottom: 5px; width: 100%;"),
         textInput("textInput_chart_name", "Chart Name"),
         downloadButton('btn_downloadPlot', 'Download Plot'),
         div(
@@ -135,7 +137,8 @@ server <- function(input, output, session) {
   # ReactiveValues zur Speicherung der Daten
   source_data <- reactiveValues(
     excel = tibble(label = NA, date = NA, value = NA),
-    db = tibble(label = NA, date = NA, value = NA)
+    db = tibble(label = NA, date = NA, value = NA),
+    edited = NULL
   )
   
   safe_labels <- function(df) {
@@ -143,12 +146,34 @@ server <- function(input, output, session) {
     df[["label"]]
   }
   
+  # Aktuell aktiver Rohdatensatz (editiert oder aus DB/Excel)
+  get_current_raw_data <- reactive({
+    if (!is.null(source_data$edited) && nrow(source_data$edited) > 0) {
+      source_data$edited
+    } else {
+      bind_rows(source_data$db, source_data$excel)
+    }
+  })
+  
+  # Button 'Edit Data' nur aktivieren wenn überhaupt Daten vorhanden sind
+  observe({
+    raw_df <- get_current_raw_data()
+    has_data <- !is.null(raw_df) && nrow(raw_df) > 0 && "value" %in% names(raw_df) && any(!is.na(raw_df$value))
+    shinyjs::toggleState("btn_edit_data", condition = has_data)
+  })
+  
   # Keep track of transformations
   series_transformations <- reactiveValues()
   
+  # Verfügbare Serien-Labels
+  available_labels <- reactive({
+    raw_df <- get_current_raw_data()
+    raw_lbls <- unique(safe_labels(raw_df))
+    na.omit(raw_lbls)
+  })
+  
   observe({
-    labels <- unique(c(safe_labels(source_data$db), safe_labels(source_data$excel)))
-    labels <- na.omit(labels)
+    labels <- available_labels()
     for (lbl in labels) {
       if (is.null(series_transformations[[lbl]])) {
         series_transformations[[lbl]] <- list(type = "Rohwert", lag = 12, offset = 0)
@@ -157,8 +182,7 @@ server <- function(input, output, session) {
   })
   
   observe({
-    labels <- unique(c(safe_labels(source_data$db), safe_labels(source_data$excel)))
-    labels <- na.omit(labels)
+    labels <- available_labels()
     for (lbl in labels) {
       sanitized <- sanitize_id(lbl)
       type_id <- paste0("trans_type_", sanitized)
@@ -191,12 +215,6 @@ server <- function(input, output, session) {
   # Temporärer Speicher für geladene Inputs zur Erhaltung bei Re-Renderings
   loaded_inputs <- reactiveVal(NULL)
   
-  # Verfügbare Serien-Labels
-  available_labels <- reactive({
-    raw_lbls <- unique(c(safe_labels(source_data$db), safe_labels(source_data$excel)))
-    na.omit(raw_lbls)
-  })
-  
   # Aktualisierung des Serien-Auswahl-Dropdowns
   observe({
     labels <- available_labels()
@@ -215,11 +233,17 @@ server <- function(input, output, session) {
   
   # Dynamische UI für Zeitreihentransformationen rendern
   output$transformation_controls <- renderUI({
-    labels <- unique(c(safe_labels(source_data$db), safe_labels(source_data$excel)))
-    labels <- na.omit(labels)
+    all_labels <- available_labels()
+    
+    current_selected <- input$selectizeInput_series_selection
+    labels <- if (!is.null(current_selected)) {
+      intersect(current_selected, all_labels)
+    } else {
+      all_labels
+    }
     
     if (length(labels) == 0) {
-      return(p("Keine Zeitreihen geladen. Bitte laden Sie eine Excel-Datei hoch oder rufen Sie DB-Daten ab.", style = "color: #777; font-style: italic;"))
+      return(p("Keine Zeitreihen ausgewählt oder geladen. Bitte laden Sie Daten hoch und wählen Sie unter 'Chart Types' die gewünschten Serien aus.", style = "color: #777; font-style: italic;"))
     }
     
     ui_elements <- lapply(labels, function(lbl) {
@@ -275,6 +299,179 @@ server <- function(input, output, session) {
     })
     
     do.call(tagList, ui_elements)
+  })
+  
+  # Modal zur Datenbearbeitung (In-App Daten hinzufügen / editieren)
+  edit_table_data <- reactiveVal(NULL)
+  
+  show_edit_data_modal <- function() {
+    raw_df <- get_current_raw_data() %>% filter(!is.na(value), !is.na(date), !is.na(label))
+    if (nrow(raw_df) == 0) {
+      showNotification("Keine Daten zum Bearbeiten vorhanden.", type = "warning")
+      return()
+    }
+    
+    df_wide <- raw_df %>%
+      mutate(date = as.character(date)) %>%
+      pivot_wider(names_from = label, values_from = value, values_fn = mean) %>%
+      arrange(date)
+    
+    edit_table_data(df_wide)
+    
+    showModal(modalDialog(
+      title = tagList(icon("table"), " Edit Data"),
+      size = "xl",
+      easyClose = FALSE,
+      div(
+        style = "margin-bottom: 12px;",
+        p(
+          style = "color: #555; margin-bottom: 8px;",
+          "Hier können Sie Datumsangaben (Format: JJJJ-MM-TT) und Werte der einzelnen Serien direkt editieren sowie am Tabellenende neue Zeilen anfügen. ",
+          "Die Tabelle öffnet standardmässig beim ", strong("Tail (neueste Werte)"), "; durch Hochscrollen gelangen Sie zurück in die Vergangenheit.",
+          tags$br(),
+          tags$small(
+            style = "color: #777;",
+            "Hinweis: Spaltennamen sind in der Ansicht auf 15 Zeichen begrenzt. Neue Zeilen können am Tabellenende eingegeben, via Rechtsklick ('Row below') oder über den Button 'Neue Zeile' angefügt werden. ",
+            "Die Änderungen verbleiben nur in der laufenden App-Sitzung und werden weder in die Datenbank zurückgeschrieben noch als Vorlagen-Input abgespeichert."
+          )
+        ),
+        div(
+          style = "display: flex; gap: 8px; margin-top: 10px;",
+          actionButton("btn_add_row_hot", "Neue Zeile am Ende anfügen", icon = icon("plus"), class = "btn-sm btn-outline-secondary"),
+          actionButton("btn_reset_edited_data", "Auf Originaldaten zurücksetzen", icon = icon("rotate-left"), class = "btn-sm btn-outline-danger")
+        )
+      ),
+      rHandsontableOutput("hot_edit_table", height = "450px"),
+      footer = tagList(
+        actionButton("btn_apply_edit_data", "Änderungen übernehmen", class = "btn-success", icon = icon("check")),
+        modalButton("Abbrechen")
+      )
+    ))
+  }
+  
+  observeEvent(input$btn_edit_data, {
+    show_edit_data_modal()
+  })
+  
+  output$hot_edit_table <- renderRHandsontable({
+    df <- edit_table_data()
+    req(df)
+    
+    # Spaltennamen für die Anzeige auf maximal 15 Zeichen begrenzen
+    orig_names <- names(df)
+    display_headers <- if (length(orig_names) > 1) {
+      c("date", substr(orig_names[-1], 1, 15))
+    } else {
+      orig_names
+    }
+    
+    hot <- rhandsontable(
+      df, 
+      colHeaders = display_headers,
+      stretchH = "all", 
+      height = 430,
+      minSpareRows = 1
+    ) %>%
+      hot_col(1, type = "date", dateFormat = "YYYY-MM-DD") %>%
+      hot_context_menu(allowRowEdit = TRUE, allowColEdit = FALSE)
+    
+    if (ncol(df) > 1) {
+      for (i in 2:ncol(df)) {
+        hot <- hot %>% hot_col(i, type = "numeric")
+      }
+    }
+    
+    # Automatisch zum Tabellenende (neueste Werte / Tail) scrollen
+    hot <- hot %>% htmlwidgets::onRender("
+      function(el, x) {
+        var hot = this.hot;
+        var scrollToTail = function() {
+          if (hot && hot.countRows && hot.countRows() > 0) {
+            hot.scrollViewportTo(hot.countRows() - 1, 0);
+            hot.render();
+          }
+        };
+        setTimeout(scrollToTail, 50);
+        setTimeout(scrollToTail, 200);
+        setTimeout(scrollToTail, 450);
+      }
+    ")
+    
+    hot
+  })
+  
+  observeEvent(input$btn_add_row_hot, {
+    current_hot <- if (!is.null(input$hot_edit_table)) {
+      hot_to_r(input$hot_edit_table)
+    } else {
+      edit_table_data()
+    }
+    req(current_hot)
+    
+    new_row <- as.data.frame(matrix(NA, nrow = 1, ncol = ncol(current_hot)))
+    names(new_row) <- names(current_hot)
+    valid_dates <- na.omit(suppressWarnings(as.Date(current_hot$date)))
+    if (length(valid_dates) > 0) {
+      new_row$date <- as.character(max(valid_dates) + 1)
+    } else {
+      new_row$date <- as.character(Sys.Date())
+    }
+    
+    edit_table_data(bind_rows(current_hot, new_row))
+  })
+  
+  observeEvent(input$btn_reset_edited_data, {
+    raw_orig <- bind_rows(source_data$db, source_data$excel) %>% filter(!is.na(value), !is.na(date), !is.na(label))
+    if (nrow(raw_orig) > 0) {
+      df_wide <- raw_orig %>%
+        mutate(date = as.character(date)) %>%
+        pivot_wider(names_from = label, values_from = value, values_fn = mean) %>%
+        arrange(date)
+      edit_table_data(df_wide)
+      showNotification("Tabelle auf Originaldaten zurückgesetzt.", type = "message")
+    }
+  })
+  
+  observeEvent(input$btn_apply_edit_data, {
+    req(input$hot_edit_table)
+    hot_df <- hot_to_r(input$hot_edit_table)
+    req(hot_df)
+    
+    # Originale Spaltennamen wiederherstellen (falls Display-Header gekürzt wurden)
+    orig_cols <- names(edit_table_data())
+    if (!is.null(orig_cols) && ncol(hot_df) == length(orig_cols)) {
+      names(hot_df) <- orig_cols
+    }
+    
+    hot_df_clean <- hot_df %>%
+      filter(!is.na(date) & str_squish(as.character(date)) != "")
+    
+    parsed_dates <- suppressWarnings(as.Date(hot_df_clean$date))
+    if (anyNA(parsed_dates)) {
+      parsed_dates_alt <- suppressWarnings(as.Date(hot_df_clean$date, format = "%d.%m.%Y"))
+      parsed_dates[is.na(parsed_dates)] <- parsed_dates_alt[is.na(parsed_dates)]
+    }
+    hot_df_clean$date <- parsed_dates
+    hot_df_clean <- hot_df_clean %>% filter(!is.na(date))
+    
+    series_cols <- setdiff(names(hot_df_clean), "date")
+    for (col in series_cols) {
+      hot_df_clean[[col]] <- as.numeric(hot_df_clean[[col]])
+    }
+    
+    hot_df_long <- hot_df_clean %>%
+      pivot_longer(cols = all_of(series_cols), names_to = "label", values_to = "value") %>%
+      filter(!is.na(value)) %>%
+      arrange(label, date)
+    
+    if (nrow(hot_df_long) == 0) {
+      showNotification("Keine gültigen Datenzeilen vorhanden.", type = "error")
+      return()
+    }
+    
+    source_data$edited <- hot_df_long
+    removeModal()
+    showNotification("Editierten Daten erfolgreich übernommen (nur in App).", type = "message")
   })
   
   # Trigger für Vorlagentabellen-Updates
@@ -365,17 +562,41 @@ server <- function(input, output, session) {
     
     if (!is.null(db_ticker_val) && str_squish(db_ticker_val) != "") {
       tryCatch({
-        ticker <- str_split(db_ticker_val, ";")[[1]] |> toupper()
-        db_data <- get_db_data(ticker)
-        labels <- str_split(db_label_val, ";")[[1]] |> str_squish()
-        length(labels) <- length(ticker)
-        ticker_label_df <- tibble(ticker = ticker, label = labels) |> 
-          mutate(label = case_when(is.na(label) | label == "" ~ ticker, TRUE ~ label))
+        ticker <- str_split(db_ticker_val, ";")[[1]] |> str_squish() |> toupper()
+        ticker <- ticker[ticker != ""]
+        req(length(ticker) > 0)
         
-        source_data$db <- db_data |>
-          left_join(ticker_label_df, by = "ticker") |>
-          select(label, date, value)
-        showNotification("Neueste Datenbank-Daten wurden geladen.", type = "message")
+        db_data <- get_db_data(ticker)
+        if (!is.null(db_data) && nrow(db_data) > 0) {
+          db_data <- db_data |> mutate(ticker = toupper(str_squish(ticker)))
+          
+          labels_raw <- if (!is.null(db_label_val) && !is.na(db_label_val)) {
+            str_split(db_label_val, ";")[[1]] |> str_squish()
+          } else {
+            character(0)
+          }
+          
+          ticker_label_df <- tibble(
+            ticker = ticker,
+            label_assigned = if (length(labels_raw) > 0) {
+              c(labels_raw, rep("", max(0, length(ticker) - length(labels_raw))))[seq_along(ticker)]
+            } else {
+              rep("", length(ticker))
+            }
+          ) |>
+            mutate(label = case_when(
+              is.na(label_assigned) | label_assigned == "" ~ ticker,
+              TRUE ~ label_assigned
+            ))
+          
+          source_data$db <- db_data |>
+            left_join(ticker_label_df |> select(ticker, label), by = "ticker") |>
+            mutate(label = coalesce(label, ticker)) |>
+            select(label, date, value)
+          showNotification("Neueste Datenbank-Daten wurden geladen.", type = "message")
+        } else {
+          stop("Keine Daten für Ticker gefunden")
+        }
       }, error = function(e) {
         showNotification(paste("Automatisches DB-Update fehlgeschlagen:", e$message), type = "warning")
         if (!is.null(restored_data$db) && nrow(restored_data$db) > 0) {
@@ -403,9 +624,9 @@ server <- function(input, output, session) {
     } else {
       source_data$excel <- tibble(label = NA, date = NA, value = NA)
     }
+    source_data$edited <- NULL
     
-    raw_lbls <- unique(c(safe_labels(source_data$db), safe_labels(source_data$excel)))
-    raw_lbls <- na.omit(raw_lbls)
+    raw_lbls <- available_labels()
     
     # Transformations-Einstellungen aus Vorlage wiederherstellen
     for (lbl in raw_lbls) {
@@ -521,6 +742,7 @@ server <- function(input, output, session) {
           filter(!is.na(value))
       })
       
+      source_data$edited <- NULL
       source_data$excel <- df
     }, error = function(e) {
       stop(safeError(e))
@@ -529,25 +751,57 @@ server <- function(input, output, session) {
   
   # DB-Abfrage Observer
   observeEvent(input$btn_pulldb, {
-    ticker <- str_split(input$textInput_dbticker, ";")[[1]] |> toupper()
-    db_data <- get_db_data(ticker)
-    labels <- str_split(input$textInput_dblabel, ";")[[1]] |> str_squish()
-    length(labels) <- length(ticker)
-    ticker_label_df <- tibble(ticker = ticker, label = labels) |> 
-      mutate(label = case_when(is.na(label) | label == "" ~ ticker, TRUE ~ label))
+    ticker_input <- input$textInput_dbticker
+    req(ticker_input)
     
+    ticker <- str_split(ticker_input, ";")[[1]] |> 
+      str_squish() |> 
+      toupper()
+    ticker <- ticker[ticker != ""]
+    req(length(ticker) > 0)
+    
+    db_data <- get_db_data(ticker)
+    if (is.null(db_data) || nrow(db_data) == 0) {
+      showNotification("Keine Daten für die angegebenen Ticker gefunden.", type = "warning")
+      return()
+    }
+    
+    db_data <- db_data |> mutate(ticker = toupper(str_squish(ticker)))
+    
+    label_input <- input$textInput_dblabel
+    labels_raw <- if (!is.null(label_input) && !is.na(label_input)) {
+      str_split(label_input, ";")[[1]] |> str_squish()
+    } else {
+      character(0)
+    }
+    
+    ticker_label_df <- tibble(
+      ticker = ticker,
+      label_assigned = if (length(labels_raw) > 0) {
+        c(labels_raw, rep("", max(0, length(ticker) - length(labels_raw))))[seq_along(ticker)]
+      } else {
+        rep("", length(ticker))
+      }
+    ) |>
+      mutate(label = case_when(
+        is.na(label_assigned) | label_assigned == "" ~ ticker,
+        TRUE ~ label_assigned
+      ))
+    
+    source_data$edited <- NULL
     source_data$db <- db_data |>
-      left_join(ticker_label_df, by = "ticker") |>
+      left_join(ticker_label_df |> select(ticker, label), by = "ticker") |>
+      mutate(label = coalesce(label, ticker)) |>
       select(label, date, value)
   })
   
   # Datenverarbeitung und Plot-Generierung
   make_plot_from_data <- function() {
-    df_raw <- bind_rows(source_data$db, source_data$excel)
+    df_raw <- get_current_raw_data()
     req(df_raw)
     req("value" %in% names(df_raw))
     
-    raw_labels <- unique(na.omit(c(safe_labels(source_data$db), safe_labels(source_data$excel))))
+    raw_labels <- available_labels()
     req(length(raw_labels) > 0)
     
     df <- transform_chart_data(

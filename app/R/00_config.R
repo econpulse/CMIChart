@@ -12,6 +12,8 @@ library(showtext)
 library(RSQLite)
 library(jsonlite)
 library(DT)
+library(rhandsontable)
+library(shinyjs)
 
 # Datenbankeinstellungen
 db_mode <- "SQLite" # "SQLite" oder "MSSQL"

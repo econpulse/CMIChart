@@ -193,27 +193,48 @@ render_season_chart <- function(df, input, fill_colors = lukb_colors) {
   } else {
     # Variante 2: Alle Jahre (Vorjahre hellgrau, aktuelles Jahr farbig)
     if (nrow(df_prior) > 0) {
+      prior_min_year <- min(df_prior$year_num)
+      prior_max_year <- max(df_prior$year_num)
+      prior_label <- if (prior_min_year == prior_max_year) {
+        as.character(prior_min_year)
+      } else {
+        paste0(prior_min_year, "\u2013", prior_max_year)
+      }
+      
       p <- p + geom_line(
         data = df_prior,
-        aes(x = dummy_date, y = value, group = year),
-        color = "#B0BEC5",
+        aes(x = dummy_date, y = value, group = year, color = prior_label),
         linewidth = 0.75,
         alpha = 0.8
       )
-    }
-    
-    if (nrow(df_latest) > 0) {
-      p <- p + geom_line(
-        data = df_latest,
-        aes(x = dummy_date, y = value, color = latest_year_str),
-        linewidth = 1.3
+      
+      if (nrow(df_latest) > 0) {
+        p <- p + geom_line(
+          data = df_latest,
+          aes(x = dummy_date, y = value, color = latest_year_str),
+          linewidth = 1.3
+        )
+      }
+      
+      p <- p + scale_color_manual(
+        name = NULL,
+        values = setNames(c("#B0BEC5", main_color), c(prior_label, latest_year_str)),
+        breaks = c(prior_label, latest_year_str)
+      )
+    } else {
+      if (nrow(df_latest) > 0) {
+        p <- p + geom_line(
+          data = df_latest,
+          aes(x = dummy_date, y = value, color = latest_year_str),
+          linewidth = 1.3
+        )
+      }
+      
+      p <- p + scale_color_manual(
+        name = NULL,
+        values = setNames(c(main_color), latest_year_str)
       )
     }
-    
-    p <- p + scale_color_manual(
-      name = NULL,
-      values = setNames(c(main_color), latest_year_str)
-    )
   }
   
   # Letzten Punkt hervorheben
