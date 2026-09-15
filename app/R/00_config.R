@@ -29,16 +29,16 @@ if (!exists("lukb_colors")) {
 }
 
 # Liefert die gewünschte Farbpalette basierend auf der Benutzerauswahl
-get_chart_palette <- function(palette_key = "pb") {
-  if (is.null(palette_key) || palette_key == "" || palette_key == "pb") {
-    # LUKB Private (Standard)
-    return(lukb_colors)
-  } else if (palette_key == "cd") {
-    # LUKB Corporate (Platzhalter: umgekehrte LUKB-Farbpalette)
+get_chart_palette <- function(palette_key = "cd") {
+  if (is.null(palette_key) || palette_key == "" || palette_key == "cd") {
+    # LUKB Corporate (Standard, Platzhalter: umgekehrte LUKB-Farbpalette)
     return(rev(lukb_colors))
+  } else if (palette_key == "pb") {
+    # LUKB Private
+    return(lukb_colors)
   } else {
     # Fallback
-    return(lukb_colors)
+    return(rev(lukb_colors))
   }
 }
 

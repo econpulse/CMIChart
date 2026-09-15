@@ -123,7 +123,7 @@ ui <- fluidPage(
           ),
           nav_panel("Chart-Titel & Farben",
                     textInput("textInput_subtitle", "Charttitel"),
-                    selectInput("selectInput_colors", "Farbskala", c("LUKB Private" = "pb", "LUKB Corporate" = "cd"))
+                    selectInput("selectInput_colors", "Farbskala", c("LUKB Corporate" = "cd", "LUKB Private" = "pb"), selected = "cd")
           )
         )
       )

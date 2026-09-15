@@ -62,7 +62,7 @@ interpolate_season_year <- function(df_yr, is_latest_year = FALSE) {
 }
 
 # Saisonalitäts-Diagramm (Saison-Chart über gemapptes Kalenderjahr)
-render_season_chart <- function(df, input, fill_colors = lukb_colors) {
+render_season_chart <- function(df, input, fill_colors = get_chart_palette("cd")) {
   main_color <- fill_colors[1]
   
   # Datumsbereich filtern
@@ -310,7 +310,7 @@ render_lukb_chart <- function(df, input, fill_colors = NULL) {
   
   # Palette ermitteln falls nicht explizit übergeben
   if (is.null(fill_colors)) {
-    palette_choice <- if (!is.null(input$selectInput_colors)) input$selectInput_colors else "pb"
+    palette_choice <- if (!is.null(input$selectInput_colors)) input$selectInput_colors else "cd"
     fill_colors <- get_chart_palette(palette_choice)
   }
   
