@@ -62,7 +62,7 @@ interpolate_season_year <- function(df_yr, is_latest_year = FALSE) {
 }
 
 # Saisonalitäts-Diagramm (Saison-Chart über gemapptes Kalenderjahr)
-render_season_chart <- function(df, input, fill_colors = get_chart_palette("cd")) {
+render_season_chart <- function(df, input, fill_colors = get_chart_palette("cd"), base_size = 14) {
   main_color <- fill_colors[1]
   
   # Datumsbereich filtern
@@ -259,7 +259,7 @@ render_season_chart <- function(df, input, fill_colors = get_chart_palette("cd")
   
   # Formatting & Theme
   p <- p +
-    theme_minimal(base_size = 14) +
+    theme_minimal(base_size = base_size) +
     theme(
       plot.subtitle = element_text(size = rel(1), hjust = 0, margin = margin(0, 0, 1, 0, "lines")),
       axis.text = element_text(color = "black"),
@@ -303,7 +303,7 @@ render_season_chart <- function(df, input, fill_colors = get_chart_palette("cd")
 }
 
 # Haupt-Renderingfunktion für alle Diagrammtypen
-render_lukb_chart <- function(df, input, fill_colors = NULL) {
+render_lukb_chart <- function(df, input, fill_colors = NULL, base_size = 14) {
   if (is.null(df) || nrow(df) == 0) {
     return(ggplot() + theme_void())
   }
@@ -318,7 +318,7 @@ render_lukb_chart <- function(df, input, fill_colors = NULL) {
   colors_ordered <- fill_colors[c(1, 3, 2, 4:length(fill_colors))]
   
   if (input$radioInput_chart_category == "Saisonalität") {
-    return(render_season_chart(df, input, fill_colors))
+    return(render_season_chart(df, input, fill_colors, base_size = base_size))
   } else if (input$radioInput_chart_category == "Kategoriendiagramm") {
     
     date_end <- if (!is.null(input$textInput_date_end) && input$textInput_date_end != "") {
@@ -388,7 +388,7 @@ render_lukb_chart <- function(df, input, fill_colors = NULL) {
       
       p <- p +
         coord_fixed(xlim = c(-2.2, 2.2), ylim = c(-1.2, 1.2), clip = "off") +
-        theme_minimal(base_size = 14) +
+        theme_minimal(base_size = base_size) +
         theme(
           axis.title = element_blank(),
           axis.text = element_blank(),
@@ -419,7 +419,7 @@ render_lukb_chart <- function(df, input, fill_colors = NULL) {
           geom_text(aes(label = scales::comma(value, big.mark = "'"),
                         hjust = ifelse(value >= 0, -0.2, 1.2)),
                     size = 4) +
-          theme_minimal(base_size = 14) +
+          theme_minimal(base_size = base_size) +
           theme(
             axis.title.x = element_blank(),
             axis.text.x = element_blank(),
@@ -438,7 +438,7 @@ render_lukb_chart <- function(df, input, fill_colors = NULL) {
           geom_text(aes(label = scales::comma(value, big.mark = "'"),
                         vjust = ifelse(value >= 0, -0.5, 1.5)),
                     size = 4) +
-          theme_minimal(base_size = 14) +
+          theme_minimal(base_size = base_size) +
           theme(
             axis.title.y = element_blank(),
             axis.text.y = element_blank(),
@@ -526,7 +526,7 @@ render_lukb_chart <- function(df, input, fill_colors = NULL) {
     }
     
     p <- p +
-      theme_minimal(base_size = 14) +
+      theme_minimal(base_size = base_size) +
       theme(
         plot.subtitle = element_text(size = rel(1), hjust = 0, margin = margin(0, 0, 1, 0, "lines")),
         axis.text = element_text(color = "black"),

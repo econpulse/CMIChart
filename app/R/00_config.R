@@ -69,3 +69,23 @@ textInputRow <- function(inputId, label, value = "") {
   )
 }
 
+# Vordefinierte Ausgabeformate für Charts
+CHART_FORMATS <- list(
+  standard = list(
+    id = "standard",
+    label = "Standard (17.4 × 8.7 cm)",
+    width = 17.4,
+    height = 8.7,
+    units = "cm",
+    base_size = 14
+  ),
+  wide = list(
+    id = "wide",
+    label = "Grossformat / Breit (28.5 × 13.0 cm)",
+    width = 28.5,
+    height = 13.0,
+    units = "cm",
+    base_size = 16
+  )
+)
+

@@ -27,6 +27,12 @@ ui <- fluidPage(
         actionButton("btn_pulldb", "Get DB data"),
         actionButton("btn_edit_data", "Edit Data", class = "btn-outline-primary", icon = icon("table"), style = "margin-top: 8px; margin-bottom: 5px; width: 100%;"),
         textInput("textInput_chart_name", "Chart Name"),
+        selectInput(
+          "selectInput_export_format",
+          "Format:",
+          choices = setNames(names(CHART_FORMATS), sapply(CHART_FORMATS, function(x) x$label)),
+          selected = "standard"
+        ),
         downloadButton('btn_downloadPlot', 'Download Plot'),
         div(
           style = "display: flex; gap: 5px; margin-top: 5px; margin-bottom: 5px;",
@@ -796,7 +802,7 @@ server <- function(input, output, session) {
   })
   
   # Datenverarbeitung und Plot-Generierung
-  make_plot_from_data <- function() {
+  make_plot_from_data <- function(base_size = 14) {
     df_raw <- get_current_raw_data()
     req(df_raw)
     req("value" %in% names(df_raw))
@@ -814,20 +820,36 @@ server <- function(input, output, session) {
     req(nrow(df) > 0)
     
     selected_palette <- get_chart_palette(input$selectInput_colors)
-    render_lukb_chart(df = df, input = input, fill_colors = selected_palette)
+    render_lukb_chart(df = df, input = input, fill_colors = selected_palette, base_size = base_size)
   }
   
   # Plot Output
   output$contents <- renderPlot({
-    make_plot_from_data()
+    format_key <- if (!is.null(input$selectInput_export_format)) input$selectInput_export_format else "standard"
+    fmt_config <- CHART_FORMATS[[format_key]]
+    base_size <- if (!is.null(fmt_config$base_size)) fmt_config$base_size else 14
+    make_plot_from_data(base_size = base_size)
   })
   
   # Plot Download Handler
   output$btn_downloadPlot <- downloadHandler(
-    filename = "Shinyplot.png",
+    filename = function() {
+      format_key <- if (!is.null(input$selectInput_export_format)) input$selectInput_export_format else "standard"
+      paste0("Shinyplot_", format_key, ".png")
+    },
     content = function(file) {
       showtext_opts(dpi = 300)
-      ggsave(file, make_plot_from_data(), width = 17.4, height = 8.7, units = "cm")
+      format_key <- if (!is.null(input$selectInput_export_format)) input$selectInput_export_format else "standard"
+      fmt_config <- CHART_FORMATS[[format_key]]
+      if (is.null(fmt_config)) fmt_config <- CHART_FORMATS$standard
+      
+      ggsave(
+        filename = file,
+        plot = make_plot_from_data(base_size = fmt_config$base_size),
+        width = fmt_config$width,
+        height = fmt_config$height,
+        units = fmt_config$units
+      )
       showtext_opts(dpi = 96)
     }
   )
