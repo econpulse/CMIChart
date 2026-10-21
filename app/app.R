@@ -76,7 +76,7 @@ ui <- fluidPage(
           ),
           nav_panel("Legend",
                     checkboxInput("checkboxInput_show_legend", "Legende zeigen", value = TRUE),
-                    selectInput("selectInput_legendposition", label = "Position der Legende", choices = c("bottom", "right", "none", "topleft"), selected = "bottom"),
+                    selectInput("selectInput_legendposition", label = "Position der Legende", choices = c("bottom", "right", "none", "topleft", "topright"), selected = "bottom"),
                     textInput("textInput_legendrows", label = "#Zeilen in Legende", value = "1")
           ),
           nav_panel("Chart Types",

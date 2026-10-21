@@ -290,6 +290,8 @@ render_season_chart <- function(df, input, fill_colors = get_chart_palette("cd")
   if (!is.null(input$selectInput_legendposition)) {
     if (input$selectInput_legendposition == "topleft") {
       p <- p + theme(legend.position = c(0, 1), legend.justification = c(0, 1))
+    } else if (input$selectInput_legendposition == "topright") {
+      p <- p + theme(legend.position = c(1, 1), legend.justification = c(1, 1))
     } else {
       p <- p + theme(legend.position = input$selectInput_legendposition)
     }
@@ -403,6 +405,8 @@ render_lukb_chart <- function(df, input, fill_colors = NULL, base_size = 14) {
       
       if (input$selectInput_legendposition == "topleft") {
         p <- p + theme(legend.position = c(0, 1), legend.justification = c(0, 1))
+      } else if (input$selectInput_legendposition == "topright") {
+        p <- p + theme(legend.position = c(1, 1), legend.justification = c(1, 1))
       } else {
         p <- p + theme(legend.position = input$selectInput_legendposition)
       }
@@ -551,6 +555,8 @@ render_lukb_chart <- function(df, input, fill_colors = NULL, base_size = 14) {
     
     if (input$selectInput_legendposition == "topleft") {
       p <- p + theme(legend.position = c(0, 1), legend.justification = c(0, 1))
+    } else if (input$selectInput_legendposition == "topright") {
+      p <- p + theme(legend.position = c(1, 1), legend.justification = c(1, 1))
     } else {
       p <- p + theme(legend.position = input$selectInput_legendposition)
     }
