@@ -62,6 +62,7 @@ ui <- fluidPage(
                     textInput("textInput_date_labels", "X-Achse-Label (z.B. '%d %m %Y')", "%b %Y")
           ),
           nav_panel("Y-Axis",
+                    checkboxInput("checkboxInput_y_percent", "Prozent", value = FALSE),
                     textInput("textInput_y_nachkomma", "Y-Achse-Nachkommastellen", "Auto"),
                     textInput("textInput_y_limits", "Min und Max der y-Achse"),
                     textInput("textInput_manual_y_breaks", "Manuelle y-Breaks")
@@ -728,9 +729,14 @@ server <- function(input, output, session) {
   observeEvent(input$btn_file1, {
     tryCatch({
       data <- read_excel(input$btn_file1$datapath)
-      codenames <- which(grepl("code|name|date", tolower(colnames(data))))
+      codenames <- which(grepl("code|name|date|datum", tolower(colnames(data))))
       
-      df <- map_df(seq(1, length(codenames), 1), function(i) {
+      if (length(codenames) == 0) {
+        showNotification("Keine Datumsspalte (code, name, date, datum) gefunden.", type = "error")
+        return()
+      }
+      
+      df <- map_df(seq_along(codenames), function(i) {
         start_col <- codenames[i]
         end_col <- ifelse(i < length(codenames), codenames[i + 1] - 1, ncol(data))
         

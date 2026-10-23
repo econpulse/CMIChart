@@ -267,10 +267,17 @@ render_season_chart <- function(df, input, fill_colors = get_chart_palette("cd")
     ) +
     scale_y_continuous(
       breaks = y_breaks,
-      labels = scales::label_comma(
-        big.mark = "'",
-        if (as.character(input$textInput_y_nachkomma) != "Auto") accuracy = 10^(-as.numeric(input$textInput_y_nachkomma))
-      )
+      labels = if (isTRUE(input$checkboxInput_y_percent)) {
+        scales::label_percent(
+          big.mark = "'",
+          if (!is.null(input$textInput_y_nachkomma) && as.character(input$textInput_y_nachkomma) != "Auto") accuracy = 10^(-as.numeric(input$textInput_y_nachkomma))
+        )
+      } else {
+        scales::label_comma(
+          big.mark = "'",
+          if (!is.null(input$textInput_y_nachkomma) && as.character(input$textInput_y_nachkomma) != "Auto") accuracy = 10^(-as.numeric(input$textInput_y_nachkomma))
+        )
+      }
     ) +
     coord_cartesian(ylim = y_limits) +
     scale_x_date(
@@ -540,10 +547,17 @@ render_lukb_chart <- function(df, input, fill_colors = NULL, base_size = 14) {
       scale_fill_manual(values = colors_ordered) +
       scale_y_continuous(
         breaks = y_breaks,
-        labels = scales::label_comma(
-          big.mark = "'",
-          if (as.character(input$textInput_y_nachkomma) != "Auto") accuracy = 10^(-as.numeric(input$textInput_y_nachkomma))
-        )
+        labels = if (isTRUE(input$checkboxInput_y_percent)) {
+          scales::label_percent(
+            big.mark = "'",
+            if (!is.null(input$textInput_y_nachkomma) && as.character(input$textInput_y_nachkomma) != "Auto") accuracy = 10^(-as.numeric(input$textInput_y_nachkomma))
+          )
+        } else {
+          scales::label_comma(
+            big.mark = "'",
+            if (!is.null(input$textInput_y_nachkomma) && as.character(input$textInput_y_nachkomma) != "Auto") accuracy = 10^(-as.numeric(input$textInput_y_nachkomma))
+          )
+        }
       ) +
       coord_cartesian(ylim = y_limits) +
       scale_x_date(date_breaks = date_breaks, date_labels = date_labels) +
