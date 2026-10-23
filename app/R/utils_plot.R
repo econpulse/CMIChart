@@ -269,6 +269,7 @@ render_season_chart <- function(df, input, fill_colors = get_chart_palette("cd")
       breaks = y_breaks,
       labels = if (isTRUE(input$checkboxInput_y_percent)) {
         scales::label_percent(
+          suffix = " %",
           big.mark = "'",
           if (!is.null(input$textInput_y_nachkomma) && as.character(input$textInput_y_nachkomma) != "Auto") accuracy = 10^(-as.numeric(input$textInput_y_nachkomma))
         )
@@ -549,6 +550,7 @@ render_lukb_chart <- function(df, input, fill_colors = NULL, base_size = 14) {
         breaks = y_breaks,
         labels = if (isTRUE(input$checkboxInput_y_percent)) {
           scales::label_percent(
+            suffix = " %",
             big.mark = "'",
             if (!is.null(input$textInput_y_nachkomma) && as.character(input$textInput_y_nachkomma) != "Auto") accuracy = 10^(-as.numeric(input$textInput_y_nachkomma))
           )
